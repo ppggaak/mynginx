@@ -7,6 +7,7 @@ package com.example.nginx;
 
 import android.content.Context;
 import android.os.Build;
+import android.util.Log;
 
 
 import java.io.BufferedInputStream;
@@ -15,6 +16,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.Enumeration;
 import java.util.Vector;
 import java.util.zip.ZipEntry;
@@ -38,7 +40,7 @@ public class NginxHelper {
     }
 
 
-    static String[] buildOpenvpnArgv(Context c) {
+    static String[] buildNginxArgv(Context c) {
         Vector<String> args = new Vector<>();
 
         String binaryName = writeNginx(c);
@@ -87,75 +89,126 @@ public class NginxHelper {
 
     }
 
+    /**
+     * 在/data/data/下创建一个file文件夹，存放文件
+     */
+    public static void copyZipFile(Context context, String fileName) {
+        InputStream in = null;
+        FileOutputStream out = null;
+        String path = "/data/data/" + context.getPackageName() + "/file/";
+        File file = new File(path + fileName);
 
-    public static void unZipFile(Context context,String archive, String decompressDir) throws IOException {
+        //创建文件夹
+        File filePath = new File(path);
+        if (!filePath.exists()){
+            filePath.mkdirs();
 
+            try {
+                in = context.getAssets().open(fileName); // 从assets目录下复制
+                out = new FileOutputStream(file);
+                int length = -1;
+                byte[] buf = new byte[1024];
+                while ((length = in.read(buf)) != -1) {
+                    out.write(buf, 0, length);
+                }
+                out.flush();
+            } catch (Exception e) {
+                Log.e(TAG,e.toString());
+            } finally {
+                try {
+                    if (in != null) in.close();
+                    if (out != null) out.close();
+                } catch (IOException e1) {
+                    Log.e(TAG,e1.toString());
+                }
+            }
+        }
 
-
+        Log.d(TAG, "unzip html file" );
         try {
-            File cacheDir=context.getCacheDir();
-            if (!cacheDir.exists()){
-                cacheDir.mkdirs();
-            }
-            File outFile =new File(cacheDir,archive);
-            if (!outFile.exists()){
-                boolean res=outFile.createNewFile();
-
-            }else {
-                if (outFile.length()>10){
-                    return;
-                }
-            }
-            InputStream is=context.getAssets().open(archive);
-            FileOutputStream fos = new FileOutputStream(outFile);
-            byte[] buffer = new byte[1024];
-            int byteCount;
-            while ((byteCount = is.read(buffer)) != -1) {
-                fos.write(buffer, 0, byteCount);
-            }
-            fos.flush();
-            is.close();
-            fos.close();
-        } catch (IOException e) {
-            e.printStackTrace();
+            upZipFile(file,"/sdcard/");
+        } catch (Exception e) {
+            Log.e(TAG,e.toString());
         }
 
-
-        BufferedInputStream bi;
-        ZipFile zf = new ZipFile(archive);
-        Enumeration e = zf.entries();
-        while (e.hasMoreElements()) {
-            ZipEntry ze2 = (ZipEntry) e.nextElement();
-            String entryName = ze2.getName();
-            String path = decompressDir + "/" + entryName;
-            if (ze2.isDirectory()) {
-                File decompressDirFile = new File(path);
-                if (!decompressDirFile.exists()) {
-                    decompressDirFile.mkdirs();
-                }
-            } else {
-                String fileDir = path.substring(0, path.lastIndexOf("/"));
-                if (decompressDir.endsWith("zip")) {
-                    decompressDir = decompressDir.substring(0, decompressDir.lastIndexOf("zip"));
-                }
-                File fileDirFile = new File(decompressDir);
-                if (!fileDirFile.exists()) {
-                    fileDirFile.mkdirs();
-                }
-                String substring = entryName.substring(entryName.lastIndexOf("/") + 1, entryName.length());
-                BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(decompressDir + "/" + substring));
-                bi = new BufferedInputStream(zf.getInputStream(ze2));
-                byte[] readContent = new byte[1024];
-                int readCount = bi.read(readContent);
-                while (readCount != -1) {
-                    bos.write(readContent, 0, readCount);
-                    readCount = bi.read(readContent);
-                }
-                bos.close();
-            }
-        }
-        zf.close();
     }
 
+
+    /**
+     * 解压缩
+     * 将zipFile文件解压到folderPath目录下.
+     * @param zipFile zip文件
+     * @param folderPath 解压到的地址
+     * @throws IOException
+     */
+    public static void upZipFile(File zipFile, String folderPath) throws IOException {
+        File filePath = new File(folderPath+"nginx");
+        if (filePath.exists())
+            return;
+        ZipFile zfile = new ZipFile(zipFile);
+        Enumeration zList = zfile.entries();
+        ZipEntry ze = null;
+        byte[] buf = new byte[1024];
+        while (zList.hasMoreElements()) {
+            ze = (ZipEntry) zList.nextElement();
+            if (ze.isDirectory()) {
+                Log.d(TAG, "isDirectory: " + ze.getName());
+                String dirstr = folderPath + ze.getName();
+                //dirstr = new String(dirstr.getBytes("8859_1"), "GB2312");
+                //Log.d(TAG, "str = " + dirstr);
+                File f = new File(dirstr);
+                f.mkdir();
+                continue;
+            }
+            Log.d(TAG, "file: " + ze.getName());
+            OutputStream os = new BufferedOutputStream(new FileOutputStream(getRealFileName(folderPath, ze.getName())));
+            InputStream is = new BufferedInputStream(zfile.getInputStream(ze));
+            int readLen = 0;
+            while ((readLen = is.read(buf, 0, 1024)) != -1) {
+                os.write(buf, 0, readLen);
+            }
+            is.close();
+            os.close();
+        }
+        zfile.close();
+    }
+
+    /**
+     * 给定根目录，返回一个相对路径所对应的实际文件名.
+     * @param baseDir     指定根目录
+     * @param absFileName 相对路径名，来自于ZipEntry中的name
+     * @return java.io.File 实际的文件
+     */
+    public static File getRealFileName(String baseDir, String absFileName) {
+        String[] dirs = absFileName.split("/");
+        File ret = new File(baseDir);
+        String substr = null;
+        if (dirs.length > 1) {
+            for (int i = 0; i < dirs.length - 1; i++) {
+                substr = dirs[i];
+//                try {
+//                    substr = new String(substr.getBytes("8859_1"), "GB2312");
+//                } catch (UnsupportedEncodingException e) {
+//                    e.printStackTrace();
+//                }
+                ret = new File(ret, substr);
+
+            }
+            Log.d(TAG, "1ret = " + ret);
+            if (!ret.exists())
+                ret.mkdirs();
+            substr = dirs[dirs.length - 1];
+//            try {
+//                substr = new String(substr.getBytes("8859_1"), "GB2312");
+//                Log.d(TAG, "substr = " + substr);
+//            } catch (UnsupportedEncodingException e) {
+//                e.printStackTrace();
+//            }
+            ret = new File(ret, substr);
+            // Log.d(TAG, "2ret = " + ret);
+            return ret;
+        }
+        return ret;
+    }
 
 }

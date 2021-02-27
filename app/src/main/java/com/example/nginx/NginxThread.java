@@ -27,16 +27,19 @@ class NginxThread implements Runnable {
     }
 
     private void stopProcess() {
-        mProcess.destroy();
+        if(mProcess != null){
+            mProcess.destroy();
+        }
     }
 
     @Override
     public void run() {
         try {
-            Log.i(TAG, "Starting openvpn");
-            startNginxThreadArgs(mArgv);
+            Log.i(TAG, "Starting nginx");
+            //startNginxThreadArgs(mArgv);
+            startNginxThread();
         } catch (Exception e) {
-            Log.e(TAG, "OpenVPNThread Got " + e.toString());
+            Log.e(TAG, "nginx Got " + e.toString());
         } finally {
             int exitvalue = 0;
             try {
@@ -47,6 +50,10 @@ class NginxThread implements Runnable {
             }
             Log.i(TAG, "Exiting");
         }
+    }
+    private void startNginxThread() {
+        NginxNative mNginxNative = new NginxNative();
+        mNginxNative.nativeRun();
     }
 
     private void startNginxThreadArgs(String[] argv) {
@@ -75,6 +82,7 @@ class NginxThread implements Runnable {
             }
 
         } catch (IOException e) {
+            Log.i(TAG, "Starting nginx error:"+e.toString());
             stopProcess();
         }finally {
             if(br !=null){

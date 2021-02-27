@@ -34,12 +34,11 @@ public class MainActivity extends AppCompatActivity {
         mStartButton = (Button) findViewById(R.id.button1);
         mStopButton = (Button) findViewById(R.id.button2);
 
-
         mStartButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 //mThread.start();
-                String[] mString = NginxHelper.buildOpenvpnArgv(MainActivity.this);
+                String[] mString = NginxHelper.buildNginxArgv(MainActivity.this);
                 NginxThread processThread = new NginxThread(mString);
                 synchronized (mProcessLock)
                 {
@@ -57,8 +56,14 @@ public class MainActivity extends AppCompatActivity {
         });
 
         myRequetPermission();
+        new Thread(mzipRun).start();
     }
-
+    private Runnable mzipRun = new Runnable() {
+        @Override
+        public void run() {
+            NginxHelper.copyZipFile(MainActivity.this,"html.zip");
+        }
+    };
     private void myRequetPermission() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE,
@@ -66,7 +71,7 @@ public class MainActivity extends AppCompatActivity {
                     Manifest.permission.CAMERA
             }, 1);
         }else {
-            Toast.makeText(this,"您已经申请了权限!",Toast.LENGTH_SHORT).show();
+            //Toast.makeText(this,"您已经申请了权限!",Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -80,7 +85,6 @@ public class MainActivity extends AppCompatActivity {
                     Toast.makeText(this, "" + "权限" + permissions[i] + "申请成功", Toast.LENGTH_SHORT).show();
                 } else {
                     if (!ActivityCompat.shouldShowRequestPermissionRationale(this, permissions[i])){//用户选择了禁止不再询问
-
                         AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
                         builder.setTitle("permission")
                                 .setMessage("点击允许才可以使用我们的app哦")
